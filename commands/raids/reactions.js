@@ -1,0 +1,139 @@
+const {PartyStatus, Team} = require('../../app/constants'),
+  {MessageEmbed} = require('discord.js'),
+  Gym = require('../../app/gym'),
+  Helper = require('../../app/helper'),
+  PartyManager = require('../../app/party-manager'),
+  Raid = require('../../app/raid'),
+  sleep = require('sleep');
+
+class RaidReactions {
+  static async reaction_builder(raid, statusMessage, raidChannel, useMap=true) {
+    let interested_emoji = '⚠',
+	    join_emoji = '✅',
+	    leave_emoji = '❌',
+	    here_emoji = '📍',
+	    done_emoji = '🙏',
+	    up_emoji = '⬆',
+	    down_emoji = '⬇',
+	    map_emoji = '🗺',
+	    possible_emojis = [interested_emoji, join_emoji, leave_emoji, up_emoji, down_emoji, here_emoji, done_emoji];
+
+    if(useMap){
+      possible_emojis.push(map_emoji)
+    }
+    possible_emojis.forEach(async emoji => {
+    	statusMessage.react(emoji)
+    	await sleep.sleep(1000)
+    });
+
+    const filter = (reaction, user) => {
+        return possible_emojis.includes(reaction.emoji.name) && !user.bot;
+    };
+
+    const collector = statusMessage.createReactionCollector(filter, { time: 1500000});
+    collector.on('collect', async (reaction, user) =>{
+        if(reaction.emoji.name === map_emoji){
+          const gymId = raid.gymId,
+          gym = Gym.getGym(gymId),
+          embed = new MessageEmbed();
+
+          embed.setColor('GREEN');
+          embed.setImage(`attachment://${gymId}.png`);
+
+          raidChannel.send(`https://www.google.com/maps/search/?api=1&query=${gym.gymInfo.latitude}%2C${gym.gymInfo.longitude}`, {
+              files: [
+                require.resolve(`PgP-Data/data/images/${gymId}.png`)
+              ],
+              embed
+            })
+            .catch(err => log.error(err));
+        }
+        else{
+          let party_status;
+          let attendee = raid.attendees[user.id];
+          let additionalAttendees;
+          let embed;
+
+          if(attendee){
+            additionalAttendees = attendee.number-1
+          }
+          else{
+            additionalAttendees = 0
+          }
+          
+          if(reaction.emoji.name === join_emoji){
+            embed = new MessageEmbed();
+            embed.setTitle(`**${user.username}** joined the raid!`)
+            embed.setColor('GREEN')
+            party_status = PartyStatus.COMING;
+          }
+          else if(reaction.emoji.name === interested_emoji){
+            embed = new MessageEmbed();
+            embed.setTitle(`**${user.username}** is interested in the raid!`)
+            embed.setColor('#f6d405')
+            party_status = PartyStatus.INTERESTED;
+          }
+          else if(reaction.emoji.name === leave_emoji){
+            if (attendee) {
+              embed = new MessageEmbed();
+              embed.setTitle(`**${user.username}** left the raid!`)
+              embed.setColor('RED')
+            }
+            party_status = PartyStatus.LEAVE;
+            await raid.removeAttendee(user.id);
+          }
+          else if(reaction.emoji.name === here_emoji){
+            embed = new MessageEmbed();
+            embed.setTitle(`**${user.username}** arrived to the raid!`)
+            embed.setColor('BLUE')
+            party_status = PartyStatus.PRESENT;
+          }
+          else if(reaction.emoji.name === done_emoji){
+            party_status = PartyStatus.COMPLETE;
+          }
+          else if(reaction.emoji.name === up_emoji){
+            if (!attendee) {
+              raidChannel.send(`**<@${user.username}** you are not signed up for this raid!`)
+              reaction.users.remove(user.id);
+              return statusMessage;
+            }
+            else{
+              additionalAttendees = attendee.number
+              party_status = attendee.status
+            }
+          }
+          else if(reaction.emoji.name === down_emoji){
+            if (!attendee) {
+              raidChannel.send(`**${user.username}** you are not signed up for this raid!`)
+              reaction.users.remove(user.id);
+              return statusMessage;
+            }
+            else{
+              if(attendee.number === 1){
+                additionalAttendees = 0
+              }
+              else{
+                additionalAttendees = attendee.number-2
+              }
+              party_status = attendee.status
+            }
+          }
+
+          if (party_status !== PartyStatus.LEAVE){
+            if(!attendee){
+              raidChannel.send(`Welcome, <@${user.id}>`)
+            }
+            await raid.setMemberStatus(user.id, party_status, additionalAttendees);
+          }
+          raid.refreshStatusMessages();
+          if(embed !== undefined){
+            raidChannel.send(embed)
+          }
+      }
+      reaction.users.remove(user.id);
+    });
+    return statusMessage;
+  }
+ }
+
+ module.exports = RaidReactions;

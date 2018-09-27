@@ -7,7 +7,8 @@ const log = require('loglevel').getLogger('StatusCommand'),
   Gym = require('../../app/gym'),
   PartyManager = require('../../app/party-manager'),
   Raid = require('../../app/raid'),
-  settings = require('../../data/settings');
+  settings = require('../../data/settings'),
+  RaidReactions = require('./reactions');
 
 class StatusCommand extends Commando.Command {
   constructor(client) {
@@ -47,6 +48,7 @@ class StatusCommand extends Commando.Command {
       message.channel.send(sourceChannelMessageHeader, fullStatusMessage)
         .then(statusMessage => {
           raid.replaceLastMessage(statusMessage);
+          RaidReactions.reaction_builder(raid, statusMessage, message.channel);
         })
         .catch(err => log.error(err));
     }

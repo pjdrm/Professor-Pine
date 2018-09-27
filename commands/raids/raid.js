@@ -7,7 +7,8 @@ const log = require('loglevel').getLogger('RaidCommand'),
   Helper = require('../../app/helper'),
   PartyManager = require('../../app/party-manager'),
   Raid = require('../../app/raid'),
-  Utility = require('../../app/utility');
+  Utility = require('../../app/utility'),
+  RaidReactions = require('./reactions');
 
 class RaidCommand extends Commando.Command {
   constructor(client) {
@@ -101,7 +102,7 @@ class RaidCommand extends Commando.Command {
       sourceChannel = message.adjacent.channel;
     }
 
-    let raid;
+    let raid, regionalMessage;
 
     Raid.createRaid(sourceChannel.id, message.member.id, pokemon, gymId)
     // create and send announcement message to region channel
@@ -122,7 +123,9 @@ class RaidCommand extends Commando.Command {
               return PartyManager.getChannel(raid.channelId)
                 .then(channelResult => {
                   if (channelResult.ok) {
+                    RaidReactions.reaction_builder(raid, regionalMessage, channelResult, false);
                     return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage);
+                      .then(async sentMessage => RaidReactions.reaction_builder(raid, sentMessage, channelResult.channel));
                   }
                 })
                 .catch(err => log.error(err));
