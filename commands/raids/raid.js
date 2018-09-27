@@ -124,7 +124,7 @@ class RaidCommand extends Commando.Command {
                 .then(channelResult => {
                   if (channelResult.ok) {
                     RaidReactions.reaction_builder(raid, regionalMessage, channelResult, false);
-                    return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage);
+                    return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage)
                       .then(async sentMessage => RaidReactions.reaction_builder(raid, sentMessage, channelResult.channel));
                   }
                 })
