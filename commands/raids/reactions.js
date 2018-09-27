@@ -3,8 +3,7 @@ const {PartyStatus, Team} = require('../../app/constants'),
   Gym = require('../../app/gym'),
   Helper = require('../../app/helper'),
   PartyManager = require('../../app/party-manager'),
-  Raid = require('../../app/raid'),
-  sleep = require('sleep');
+  Raid = require('../../app/raid');
 
 class RaidReactions {
   static async reaction_builder(raid, statusMessage, raidChannel, useMap=true) {
@@ -23,7 +22,6 @@ class RaidReactions {
     }
     possible_emojis.forEach(async emoji => {
     	statusMessage.react(emoji)
-    	await sleep.sleep(1000)
     });
 
     const filter = (reaction, user) => {
