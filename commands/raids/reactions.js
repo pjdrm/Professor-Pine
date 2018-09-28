@@ -3,7 +3,8 @@ const {PartyStatus, Team} = require('../../app/constants'),
   Gym = require('../../app/gym'),
   Helper = require('../../app/helper'),
   PartyManager = require('../../app/party-manager'),
-  Raid = require('../../app/raid');
+  Raid = require('../../app/raid'),
+  Utility = require('../../app/utility');
 
 class RaidReactions {
   static async reaction_builder(raid, statusMessage, raidChannel, useMap=true) {
@@ -21,7 +22,7 @@ class RaidReactions {
       possible_emojis.push(map_emoji)
     }
     possible_emojis.forEach(async emoji => {
-    	statusMessage.react(emoji)
+    	statusMessage.react(emoji);
     });
 
     const filter = (reaction, user) => {
@@ -47,13 +48,35 @@ class RaidReactions {
             .catch(err => log.error(err));
         }
         else{
-          let party_status;
-          let attendee = raid.attendees[user.id];
-          let additionalAttendees;
-          let embed;
+          let party_status,
+            attendee = raid.attendees[user.id],
+            member = (await raid.getMember(user.id)).member,
+            team = Helper.getTeam(member),
+            team_emoji,
+            additionalAttendees,
+            embed,
+            messageHeader = '';
+
+          switch (team) {
+            case Team.INSTINCT:
+              team_emoji = Helper.getEmoji('instinct');
+              break;
+
+            case Team.MYSTIC:
+              team_emoji = Helper.getEmoji('mystic');
+              break;
+
+            case Team.VALOR:
+              team_emoji = Helper.getEmoji('valor');
+              break;
+
+            default:
+              team_emoji = '';
+          }
 
           if(attendee){
             additionalAttendees = attendee.number-1
+            
           }
           else{
             additionalAttendees = 0
@@ -61,20 +84,20 @@ class RaidReactions {
           
           if(reaction.emoji.name === join_emoji){
             embed = new MessageEmbed();
-            embed.setTitle(`**${user.username}** joined the raid!`)
-            embed.setColor('GREEN')
+            embed.setTitle('Trainer has joined the raid!');
+            embed.setColor('GREEN');
             party_status = PartyStatus.COMING;
           }
           else if(reaction.emoji.name === interested_emoji){
             embed = new MessageEmbed();
-            embed.setTitle(`**${user.username}** is interested in the raid!`)
+            embed.setTitle(`Trainer is interested in the raid!`)
             embed.setColor('#f6d405')
             party_status = PartyStatus.INTERESTED;
           }
           else if(reaction.emoji.name === leave_emoji){
             if (attendee) {
               embed = new MessageEmbed();
-              embed.setTitle(`**${user.username}** left the raid!`)
+              embed.setTitle(`Trainer has left the raid!`)
               embed.setColor('RED')
             }
             party_status = PartyStatus.LEAVE;
@@ -82,7 +105,7 @@ class RaidReactions {
           }
           else if(reaction.emoji.name === here_emoji){
             embed = new MessageEmbed();
-            embed.setTitle(`**${user.username}** arrived to the raid!`)
+            embed.setTitle(`Trainer has arrived to the raid!`)
             embed.setColor('BLUE')
             party_status = PartyStatus.PRESENT;
           }
@@ -119,13 +142,15 @@ class RaidReactions {
 
           if (party_status !== PartyStatus.LEAVE){
             if(!attendee){
-              raidChannel.send(`Welcome, <@${user.id}>`)
+              messageHeader = `Welcome, <@${user.id}>`;
             }
             await raid.setMemberStatus(user.id, party_status, additionalAttendees);
           }
           raid.refreshStatusMessages();
           if(embed !== undefined){
-            raidChannel.send(embed)
+            //embed.setAuthor(`${user.username}`, member.user.displayAvatarURL())
+            embed.setDescription(`${team_emoji.toString()} ${user.username}`)
+            raidChannel.send(messageHeader, embed)
           }
       }
       reaction.users.remove(user.id);

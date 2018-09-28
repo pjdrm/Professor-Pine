@@ -595,7 +595,6 @@ class Raid extends Party {
           '__Egg Hatched At__' :
           '__Egg Hatch Time__' :
         '',
-
       gym = Gym.getGym(this.gymId),
       gymName = !!gym.nickname ?
         gym.nickname :

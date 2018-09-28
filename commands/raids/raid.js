@@ -115,7 +115,10 @@ class RaidCommand extends Commando.Command {
             fullStatusMessage = await raid.getFullStatusMessage();
 
           return sourceChannel.send(channelMessageHeader, fullStatusMessage)
-            .then(announcementMessage => PartyManager.addMessage(raid.channelId, announcementMessage))
+            .then(announcementMessage => {
+              regionalMessage = announcementMessage;
+              PartyManager.addMessage(raid.channelId, announcementMessage);
+            })
             // create and send initial status message to raid channel
             .then(async botMessage => {
               const sourceChannelMessageHeader = await raid.getSourceChannelMessageHeader(),
@@ -123,9 +126,12 @@ class RaidCommand extends Commando.Command {
               return PartyManager.getChannel(raid.channelId)
                 .then(channelResult => {
                   if (channelResult.ok) {
-                    RaidReactions.reaction_builder(raid, regionalMessage, channelResult, false);
+                    RaidReactions.reaction_builder(raid, regionalMessage, channelResult.channel, false);
                     return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage)
-                      .then(async sentMessage => RaidReactions.reaction_builder(raid, sentMessage, channelResult.channel));
+                      .then(async sentMessage => {
+                        channelResult.channel.send(`Welcome, <@${message.member.id}>`);
+                        return RaidReactions.reaction_builder(raid, sentMessage, channelResult.channel)
+                      });
                   }
                 })
                 .catch(err => log.error(err));
