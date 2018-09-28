@@ -129,7 +129,9 @@ class RaidCommand extends Commando.Command {
                     RaidReactions.reaction_builder(raid, regionalMessage, channelResult.channel, false);
                     return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage)
                       .then(async sentMessage => {
-                        channelResult.channel.send(`Welcome, <@${message.member.id}>`);
+                        if(raid.attendees[message.member.id]){
+                          channelResult.channel.send(`Welcome, <@${message.member.id}>`);
+                        }
                         return RaidReactions.reaction_builder(raid, sentMessage, channelResult.channel)
                       });
                   }
