@@ -11,10 +11,9 @@
   "cleanupInterval": 60000,
   "messageCleanupDelaySuccess": 5000,
   "messageCleanupDelayError": 30000,
-  "messageCleanupDelayStatus": 60000,
   "emoji": {
-    "thumbsUp": "pinethumbsup",
-    "thumbsDown": "pinethumbsdown"
+    "thumbsUp": "thumbsup",
+    "thumbsDown": "thumbsdown"
   },
   "features": {
     "exGymChannel": true,
@@ -25,7 +24,7 @@
     "bot-lab": "the-bot-lab",
     "mod-bot-lab": "mod-bot-only",
     "unown": "unown-sightings",
-    "ex-gym-raids": "potential-ex-gym-raids"
+    "ex-gym-raids": "possiveis-ex-raids"
   },
   "helpGroups": [
     "basic-raid",
