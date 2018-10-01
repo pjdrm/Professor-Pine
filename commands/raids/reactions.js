@@ -101,7 +101,7 @@ class RaidReactions {
           }
           else if(reaction.emoji.name === up_emoji){
             if (!attendee) {
-              raidChannel.send(`**<@${user.username}** you are not signed up for this raid!`)
+              raidChannel.send(`**<@${user.id}>** you are not signed up for this raid!`)
               reaction.users.remove(user.id);
               return statusMessage;
             }
@@ -112,7 +112,7 @@ class RaidReactions {
           }
           else if(reaction.emoji.name === down_emoji){
             if (!attendee) {
-              raidChannel.send(`**${user.username}** you are not signed up for this raid!`)
+              raidChannel.send(`**<@${user.id}>** you are not signed up for this raid!`)
               reaction.users.remove(user.id);
               return statusMessage;
             }
