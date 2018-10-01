@@ -18,10 +18,22 @@ class Pokemon extends Search {
     log.info('Indexing pokemon...');
 
     const gameMaster = await GameMaster.getVersion('latest', 'json'),
-      regex = new RegExp('^V[0-9]+_POKEMON_(.*)'),
+      pokemonRegex = new RegExp('^V[0-9]+_POKEMON_(.*)'),
+      formsRegex = new RegExp('^FORMS_V[0-9]+_POKEMON_(.*)'),
       pokemonMetadata = require('../data/pokemon'),
+      alternateForms = [].concat(...gameMaster.itemTemplates
+        .filter(item => formsRegex.test(item.templateId))
+        .filter(form => !!form.formSettings.forms)
+        .map(form => form.formSettings.forms))
+        .map(form => Object.assign({},
+          {
+            formName: form.form.toLocaleLowerCase(),
+            formId: !!form.assetBundleValue ?
+              `${form.assetBundleValue}` :
+              '00'
+          })),
       pokemon = gameMaster.itemTemplates
-        .filter(item => regex.test(item.templateId))
+        .filter(item => pokemonRegex.test(item.templateId))
         .map(item => Object.assign({},
           {
             name: item.pokemonSettings.form ?
@@ -41,18 +53,11 @@ class Pokemon extends Search {
         .map(poke => Object.assign({}, poke, pokemon.find(p => p.name === poke.name)));
 
     mergedPokemon.forEach(poke => {
-      let form;
-
-      switch (poke.form) {
-        case 'alola':
-          form = '61';
-          break;
-
-        case 'normal':
-        default:
-          form = '00';
-          break;
-      }
+      const alternateForm = alternateForms
+          .find(form => form.formName === poke.name),
+        formId = alternateForm ?
+          alternateForm.formId :
+          '00';
 
       poke.name = poke.overrideName ?
         poke.overrideName :
@@ -66,7 +71,7 @@ class Pokemon extends Search {
         poke.maxBaseCP = Pokemon.calculateCP(poke, 20, 15, 15, 15);
         poke.minBoostedCP = Pokemon.calculateCP(poke, 25, 10, 10, 10);
         poke.maxBoostedCP = Pokemon.calculateCP(poke, 25, 15, 15, 15);
-        poke.url = `${privateSettings.pokemonUrlBase}pokemon_icon_${poke.number}_${form}.png`
+        poke.url = `${privateSettings.pokemonUrlBase}pokemon_icon_${poke.number}_${formId}.png`
       }
     });
 
