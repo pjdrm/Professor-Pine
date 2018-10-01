@@ -231,6 +231,29 @@ class Helper {
     return Team.NONE;
   }
 
+  getTeamEmoji(member) {
+    let team = this.getTeam(member),
+        team_emoji;
+    switch (team) {
+      case Team.INSTINCT:
+        team_emoji = this.getEmoji('instinct');
+        break;
+
+      case Team.MYSTIC:
+        team_emoji = this.getEmoji('mystic');
+        break;
+
+      case Team.VALOR:
+        team_emoji = this.getEmoji('valor');
+        break;
+
+      default:
+        team_emoji = '';
+    }
+    return team_emoji;
+
+  }
+
   getText(path, message) {
     let text = this.text;
     for (let key of path.split('.')) {

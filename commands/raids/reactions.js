@@ -22,14 +22,19 @@ class RaidReactions {
       possible_emojis.push(map_emoji)
     }
     possible_emojis.forEach(async emoji => {
-    	statusMessage.react(emoji);
+      await statusMessage.react(emoji);
     });
+
+
+    //possible_emojis.forEach(async emoji => {
+    //	statusMessage.react(emoji);
+    //});
 
     const filter = (reaction, user) => {
         return possible_emojis.includes(reaction.emoji.name) && !user.bot;
     };
 
-    const collector = statusMessage.createReactionCollector(filter, { time: 1500000});
+    const collector = statusMessage.createReactionCollector(filter, { time: 3600000});
     collector.on('collect', async (reaction, user) =>{
         if(reaction.emoji.name === map_emoji){
           const gymId = raid.gymId,
@@ -51,28 +56,10 @@ class RaidReactions {
           let party_status,
             attendee = raid.attendees[user.id],
             member = (await raid.getMember(user.id)).member,
-            team = Helper.getTeam(member),
-            team_emoji,
+            team_emoji = Helper.getTeamEmoji(member),
             additionalAttendees,
             embed,
             messageHeader = '';
-
-          switch (team) {
-            case Team.INSTINCT:
-              team_emoji = Helper.getEmoji('instinct');
-              break;
-
-            case Team.MYSTIC:
-              team_emoji = Helper.getEmoji('mystic');
-              break;
-
-            case Team.VALOR:
-              team_emoji = Helper.getEmoji('valor');
-              break;
-
-            default:
-              team_emoji = '';
-          }
 
           if(attendee){
             additionalAttendees = attendee.number-1
@@ -155,7 +142,6 @@ class RaidReactions {
       }
       reaction.users.remove(user.id);
     });
-    return statusMessage;
   }
  }
 
