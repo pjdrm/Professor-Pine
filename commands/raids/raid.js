@@ -72,7 +72,8 @@ class RaidCommand extends Commando.Command {
 
   async run(message, args) {
     const pokemon = args['pokemon'],
-      gymId = args['gymId'];
+      gymId = args['gymId'],
+      isExclusive = message.isExclusive;
 
     let sourceChannel = message.channel;
 
@@ -104,7 +105,7 @@ class RaidCommand extends Commando.Command {
 
     let raid, regionalMessage;
 
-    Raid.createRaid(sourceChannel.id, message.member.id, pokemon, gymId)
+    Raid.createRaid(sourceChannel.id, message.member.id, pokemon, gymId, isExclusive)
     // create and send announcement message to region channel
       .then(async info => {
         raid = info.party;
