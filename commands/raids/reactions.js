@@ -34,7 +34,7 @@ class RaidReactions {
         return possible_emojis.includes(reaction.emoji.name) && !user.bot;
     };
 
-    const collector = statusMessage.createReactionCollector(filter, { time: 3600000});
+    const collector = statusMessage.createReactionCollector(filter, { time: 3600000*24*5});
     collector.on('collect', async (reaction, user) =>{
         if(reaction.emoji.name === map_emoji){
           const gymId = raid.gymId,
