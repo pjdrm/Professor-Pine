@@ -15,7 +15,8 @@ const log = require('loglevel').getLogger('ImageProcessor'),
   tesseract = require('tesseract.js'),
   {PartyStatus, PartyType, TimeParameter} = require('./constants'),
   uuidv1 = require('uuid/v1'),
-  Utility = require('./utility');
+  Utility = require('./utility'),
+  RaidReactions = require('../commands/raids/reactions');
 
 // Will save all images regardless of how right or wrong, in order to better examine output
 const debugFlag = true;
@@ -1232,7 +1233,7 @@ class ImageProcessing {
       time = TimeType.UNDEFINED_END_TIME;
     }
 
-    let raid;
+    let raid, regionalMessage;
 
     Raid.createRaid(raidRegionChannel.id, message.member.id, pokemon, gymId, false, time)
       .then(async info => {
@@ -1248,7 +1249,10 @@ class ImageProcessing {
             fullStatusMessage = await raid.getFullStatusMessage();
 
           return raidRegionChannel.send(channelMessageHeader, fullStatusMessage)
-            .then(announcementMessage => PartyManager.addMessage(raid.channelId, announcementMessage, true))
+            .then(announcementMessage => {
+              regionalMessage = announcementMessage;
+              PartyManager.addMessage(raid.channelId, announcementMessage, true);
+            })
             .then(async result => {
               await PartyManager.getChannel(raid.channelId)
                 .then(async channel => {
@@ -1270,7 +1274,17 @@ class ImageProcessing {
               const sourceChannelMessageHeader = await raid.getSourceChannelMessageHeader(),
                 fullStatusMessage = await raid.getFullStatusMessage();
               return PartyManager.getChannel(raid.channelId)
-                .then(channel => channel.channel.send(sourceChannelMessageHeader, fullStatusMessage))
+                .then(channel => {
+                  RaidReactions.reaction_builder(raid, regionalMessage, channel.channel, false);
+                  return channel.channel.send(sourceChannelMessageHeader, fullStatusMessage)
+                    .then(async sentMessage => {
+                        if(raid.attendees[message.member.id]){
+                          channel.channel.send(`Welcome, <@${message.member.id}>`);
+                        }
+                        RaidReactions.reaction_builder(raid, sentMessage, channel.channel);
+                        return sentMessage
+                      });
+                })
                 .catch(err => log.error(err));
             })
             .then(channelRaidMessage => {
