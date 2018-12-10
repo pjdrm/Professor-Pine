@@ -2,7 +2,8 @@ const log = require('loglevel').getLogger('PartyManager'),
   settings = require('../data/settings'),
   storage = require('node-persist'),
   {PartyType} = require('./constants'),
-  TimeType = require('../types/time');
+  TimeType = require('../types/time'),
+  RaidReactions = require('../commands/raids/reactions');
 
 let Raid,
   RaidTrain;
@@ -130,7 +131,20 @@ class PartyManager {
 
   setClient(client) {
     this.client = client;
-
+    if(this.parties){
+      Object.entries(this.parties)
+        .forEach(async ([channelId, party]) => {
+          const [regional_channelId, regional_messageId] = party.messages[0].split(':'),
+            regional_channel = (await this.getChannel(regional_channelId)).channel,
+            regional_msg = await regional_channel.messages.fetch(regional_messageId),
+            [raid_channelId, raid_messageId] = party.messages[1].split(':'),
+            raid_channel = (await this.getChannel(raid_channelId)).channel,
+            raid_msg = await raid_channel.messages.fetch(raid_messageId),
+            raid = new Raid(party);
+          RaidReactions.reaction_builder(raid, regional_msg, raid_channel, true, false);    
+          RaidReactions.reaction_builder(raid, raid_msg, raid_channel, true, false);      
+          })
+    }
     client.on('message', message => {
       if (message.author.id !== client.user.id) {
         // if this is a raid channel that's scheduled for deletion, trigger deletion warning message

@@ -7,27 +7,29 @@ const {PartyStatus, Team} = require('../../app/constants'),
   Utility = require('../../app/utility');
 
 class RaidReactions {
-  static async reaction_builder(raid, statusMessage, raidChannel, useMap=true) {
+  static async reaction_builder(raid, statusMessage, raidChannel, isRaidChannel=true, addReactions=true) {
     let interested_emoji = '⚠',
-	    join_emoji = '✅',
-	    leave_emoji = '❌',
-	    here_emoji = '📍',
-	    done_emoji = '🙏',
-	    up_emoji = '⬆',
-	    down_emoji = '⬇',
-	    map_emoji = '🗺',
-	    possible_emojis = [interested_emoji, join_emoji, leave_emoji, up_emoji, down_emoji, here_emoji, done_emoji];
-
-    if(useMap){
-      possible_emojis.push(map_emoji)
-    }
-    possible_emojis.forEach(async emoji => {
-      await statusMessage.react(emoji);
-    });
+      join_emoji = '✅',
+      leave_emoji = '❌',
+      here_emoji = '📍',
+      done_emoji = '🙏',
+      up_emoji = '⬆',
+      down_emoji = '⬇',
+      map_emoji = '🗺',
+      possible_emojis = [interested_emoji, join_emoji, leave_emoji, up_emoji, down_emoji, here_emoji];
+      if(isRaidChannel){
+        possible_emojis.push(done_emoji)
+        possible_emojis.push(map_emoji)
+      }
+      if(addReactions){
+        possible_emojis.forEach(async emoji => {
+          await statusMessage.react(emoji);
+        });
+      }
 
 
     //possible_emojis.forEach(async emoji => {
-    //	statusMessage.react(emoji);
+    //  statusMessage.react(emoji);
     //});
 
     const filter = (reaction, user) => {
@@ -60,22 +62,28 @@ class RaidReactions {
             additionalAttendees,
             embed,
             messageHeader = '';
-
           if(attendee){
             additionalAttendees = attendee.number-1
-            
           }
           else{
             additionalAttendees = 0
           }
           
           if(reaction.emoji.name === join_emoji){
+            if(attendee && attendee.status == PartyStatus.COMING){
+              reaction.users.remove(user.id);
+              return statusMessage
+            }
             embed = new MessageEmbed();
             embed.setTitle('Trainer has joined the raid!');
             embed.setColor('GREEN');
             party_status = PartyStatus.COMING;
           }
           else if(reaction.emoji.name === interested_emoji){
+            if(attendee && attendee.status == PartyStatus.INTERESTED){
+              reaction.users.remove(user.id);
+              return statusMessage
+            }
             embed = new MessageEmbed();
             embed.setTitle(`Trainer is interested in the raid!`)
             embed.setColor('#f6d405')
@@ -91,6 +99,10 @@ class RaidReactions {
             await raid.removeAttendee(user.id);
           }
           else if(reaction.emoji.name === here_emoji){
+            if(attendee && attendee.status == PartyStatus.PRESENT){
+              reaction.users.remove(user.id);
+              return statusMessage
+            }
             embed = new MessageEmbed();
             embed.setTitle(`Trainer has arrived to the raid!`)
             embed.setColor('BLUE')

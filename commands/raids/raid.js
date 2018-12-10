@@ -127,7 +127,7 @@ class RaidCommand extends Commando.Command {
               return PartyManager.getChannel(raid.channelId)
                 .then(channelResult => {
                   if (channelResult.ok) {
-                    RaidReactions.reaction_builder(raid, regionalMessage, channelResult.channel, false);
+                    RaidReactions.reaction_builder(raid, regionalMessage, channelResult.channel, false, true);
                     return channelResult.channel.send(sourceChannelMessageHeader, fullStatusMessage)
                       .then(async sentMessage => {
                         if(raid.attendees[message.member.id]){
@@ -140,7 +140,7 @@ class RaidCommand extends Commando.Command {
                 })
                 .catch(err => log.error(err));
             })
-            .then(channelRaidMessage => PartyManager.addMessage(raid.channelId, channelRaidMessage, true))
+            .then(channelRaidMessage => PartyManager.addMessage(raid.channelId, channelRaidMessage, true, true))
             // now ask user about remaining time on this brand-new raid
             .then(result => {
               // somewhat hacky way of letting time type know if some additional information
