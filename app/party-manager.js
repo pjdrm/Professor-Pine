@@ -137,12 +137,16 @@ class PartyManager {
           const [regional_channelId, regional_messageId] = party.messages[0].split(':'),
             regional_channel = (await this.getChannel(regional_channelId)).channel,
             regional_msg = await regional_channel.messages.fetch(regional_messageId),
-            [raid_channelId, raid_messageId] = party.messages[1].split(':'),
-            raid_channel = (await this.getChannel(raid_channelId)).channel,
-            raid_msg = await raid_channel.messages.fetch(raid_messageId),
-            raid = new Raid(party);
-          RaidReactions.reaction_builder(raid, regional_msg, raid_channel, true, false);    
-          RaidReactions.reaction_builder(raid, raid_msg, raid_channel, true, false);      
+            [raid_channelId, raid_messageId] = party.messages[1].split(':');
+
+            let raid_channel = (await this.getChannel(raid_channelId));
+            if(raid_channel.ok){
+            	raid_channel = raid_channel.channel;
+	            const raid_msg = await raid_channel.messages.fetch(raid_messageId),
+	            	raid = new Raid(party);
+		          RaidReactions.reaction_builder(raid, regional_msg, raid_channel, true, false);    
+		          RaidReactions.reaction_builder(raid, raid_msg, raid_channel, true, false);
+	        }     
           })
     }
     client.on('message', message => {
