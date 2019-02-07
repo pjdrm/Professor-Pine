@@ -13,7 +13,7 @@ const log = require('loglevel').getLogger('ImageProcessor'),
   settings = require('../data/settings'),
   Status = require('./status'),
   tesseract = require('tesseract.js'),
-  {PartyStatus, PartyType, TimeParameter} = require('./constants'),
+  {PartyStatus, TimeParameter} = require('./constants'),
   uuidv1 = require('uuid/v1'),
   Utility = require('./utility'),
   RaidReactions = require('../commands/raids/reactions');
@@ -963,7 +963,7 @@ class ImageProcessing {
     });
   }
 
-  async getTier(id, message, image, region, definitelyEgg) {
+  async getTier(id, message, image, region) {
     const PokemonType = Helper.client.registry.types.get('pokemon');
     let values, pokemon;
 
@@ -978,7 +978,7 @@ class ImageProcessing {
         pokemon = PokemonType.parse(pokemon, message);
       } else {
         // if not a valid tier, use some placeholder information
-        pokemon = {placeholder: true, name: 'egg', tier: '????'};
+        pokemon = {placeholder: true, name: 'egg', egg: true, tier: '????'};
       }
 
       // something has gone wrong if no info was matched, save image for later analysis
@@ -993,7 +993,7 @@ class ImageProcessing {
     }
 
     // NOTE:  There is a chance egg tier could not be determined and we may need to try image processing again before returning...
-    return {tier: values.tier, pokemon, egg: definitelyEgg || values.tier > 0};
+    return {tier: values.tier, pokemon, egg: true};
   }
 
   async getOCRTier(id, message, image, region, level = 0) {
@@ -1111,7 +1111,7 @@ class ImageProcessing {
     //        when they're await within an IF function like this... really stupid.
     if (screenshotType === ImageProcessing.SCREENSHOT_TYPE_EGG) {
       // POKEMON TIER
-      promises.push(this.getTier(id, message, image, tierCrop, true));
+      promises.push(this.getTier(id, message, image, tierCrop));
     } else {
       // POKEMON NAME
       promises.push(this.getPokemonName(id, message, image, pokemonNameCrop));
@@ -1152,16 +1152,19 @@ class ImageProcessing {
       raidRegionChannel = data.channel,
       earliestAcceptedTime = messageTime.clone()
         .subtract(settings.standardRaidIncubateDuration, 'minutes')
-        .subtract(settings.standardRaidHatchedDuration, 'minutes');
-
-    let gymId = data.gym,
+        .subtract(settings.standardRaidHatchedDuration, 'minutes'),
+      gymId = data.gym,
       pokemon = data.pokemon,
-      time = data.phoneTime,
       duration = data.timeRemaining ?
         moment.duration(data.timeRemaining, 'hh:mm:ss') :
         moment.invalid(),
       arg = {},
-      timeWarn = false;
+      durationWarn = (!duration.isValid() || duration.asMilliseconds() === 0);
+
+    let time = durationWarn ?
+      moment.invalid() :
+      data.phoneTime,
+      timeWarn = durationWarn;
 
     // remove all reactions from processed image
     this.removeReaction(message);
@@ -1176,7 +1179,7 @@ class ImageProcessing {
             type: 'boolean'
           }
         ], 3),
-        confirmationResult = await confirmationCollector.obtain(new Commando.CommandMessage(message));
+        confirmationResult = await confirmationCollector.obtain(message);
 
       let confirmation = false;
       Utility.cleanCollector(confirmationResult);
@@ -1190,8 +1193,9 @@ class ImageProcessing {
       }
     }
 
-    // If time wasn't found or is way off-base, base raid's expiration time off of message time instead
-    if (!time || !time.isBetween(earliestAcceptedTime, messageTime, null, '[]')) {
+    // If time wasn't found or is way off-base, base raid's expiration time off of message time instead,
+    // so long as duration was read successfully
+    if (!durationWarn && (!time || !time.isBetween(earliestAcceptedTime, messageTime, null, '[]'))) {
       time = messageTime.clone().subtract(settings.screenshotMessageOffsetTime, 'seconds');
       timeWarn = true;
     }
@@ -1203,26 +1207,19 @@ class ImageProcessing {
     arg.prompt = '';
     arg.key = TimeParameter.END;
 
-    // if egg, need to add standard hatched duration to phone's time to account for raid's actual duration
-    // when setting end time
-    if (time && time.isValid() && pokemon.egg) {
-      time = time.add(settings.standardRaidHatchedDuration, 'minutes');
-    }
-
-    // add duration to time if both exist
-    if (time && time.isValid() && duration.isValid() && duration.asMilliseconds() > 0) {
+    if (time && time.isValid()) {
       // add time remaining to phone's current time to get final hatch or despawn time
       time = time.add(duration);
+
+      // if egg, add standard hatched duration to phone's time to account for raid's actual duration when setting end time
+      if (pokemon.egg) {
+        time = time.add(settings.standardRaidHatchedDuration, 'minutes');
+      }
     }
 
     if (TimeType.validate(time.format('[at] h:mma'), message, arg) === true) {
       time = TimeType.parse(time.format('[at] h:mma'), message, arg);
     } else {
-      // time was not valid, don't set any time (would rather have accurate time, than an inaccurate guess at the time)
-      message.channel
-        .send(time.format('h:mma') + ' is an invalid end time.  Either time was not interpreted correctly or has already expired.')
-        .then(message => message.delete({timeout: settings.messageCleanupDelayError}))
-        .catch(err => log.error(err));
       time = false;
     }
 

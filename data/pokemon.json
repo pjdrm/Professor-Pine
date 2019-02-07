@@ -1,5 +1,18 @@
 [
   {
+    "name": "perfect",
+    "nickname": [
+      "hundo"
+    ]
+  },
+  {
+    "name": "zero",
+    "nickname": [
+      "none",
+      "useless"
+    ]
+  },
+  {
     "tier": 1,
     "egg": true
   },
