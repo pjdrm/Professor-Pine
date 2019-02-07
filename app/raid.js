@@ -4,11 +4,14 @@ const log = require('loglevel').getLogger('Raid'),
   removeDiacritics = require('diacritics').remove,
   moment = require('moment'),
   settings = require('../data/settings'),
+  moves = require('../data/moves'),
   {PartyStatus, PartyType} = require('./constants'),
   Discord = require('discord.js'),
   Helper = require('./helper'),
+  Pokemon = require('./pokemon'),
   Party = require('./party'),
   Status = require('./status'),
+  Privacy = require('./privacy'),
   TimeType = require('../types/time');
 
 let Gym,
@@ -29,11 +32,32 @@ class Raid extends Party {
       raid = raidExists ?
         PartyManager.findRaid(gymId, isExclusive) :
         new Raid(),
-      memberStatus = await Status.getAutoStatus(memberId);
+      memberStatus = await Status.getAutoStatus(memberId),
+      memberPrivacy = await Privacy.getPrivacyStatus(memberId);
 
     if (!raidExists) {
+      if (pokemon.name === undefined) {
+        let defaultBoss = await Pokemon.getDefaultTierBoss(!!pokemon.exclusive ? 'ex' : pokemon.tier);
+
+        if (defaultBoss !== null) {
+          pokemon = defaultBoss;
+          raid.defaulted = true;
+        }
+      } else {
+        if (pokemon.quickMoves && pokemon.quickMoves.length === 1) {
+          raid.quickMove = pokemon.quickMoves[0];
+        }
+
+        if (pokemon.cinematicMoves && pokemon.cinematicMoves.length === 1) {
+          raid.cinematicMove = pokemon.cinematicMoves[0];
+        }
+      }
+
       // add some extra raid data to remember
-      raid.createdById = memberId;
+      raid.createdById = memberPrivacy ?
+        -1 :
+        memberId;
+      raid.originallyCreatedBy = memberId;
       raid.isExclusive = !!pokemon.exclusive;
       raid.sourceChannelId = sourceChannelId;
       raid.creationTime = moment().valueOf();
@@ -171,16 +195,32 @@ class Raid extends Party {
                   if (collectedResponses && collectedResponses.size === 1) {
                     response = collectedResponses.first();
 
+                    let userResponse = response.content.toLowerCase().trim();
+
                     const commandPrefix = message.client.options.commandPrefix,
-                      userResponse = response.content.toLowerCase().trim(),
-                      isCommand = userResponse.startsWith(commandPrefix);
+                      isCommand = userResponse.startsWith(commandPrefix),
+                      doneAliases = ['done', 'complete', 'finished', 'finish', 'caught-it', 'got-it', 'missed-it', 'donr',
+                                      'caughtit', 'gotit', 'missedit', 'caught it', 'got it', 'missed it', 'i missed it',
+                                      'it ran', 'i got it'];
 
                     if (isCommand) {
-                      // don't try to process response
-                      return true;
+                      let doneCommand = false;
+
+                      doneAliases.forEach(alias => {
+                        if (userResponse.indexOf(alias) !== -1) {
+                          doneCommand = true;
+                        }
+                      });
+
+                      if (!doneCommand) {
+                        // don't try to process response
+                        return true;
+                      }
+
+                      userResponse = userResponse.substr(1);
                     }
 
-                    confirmation = message.client.registry.types.get('boolean').truthy.has(userResponse);
+                    confirmation = message.client.registry.types.get('boolean').truthy.has(userResponse) || doneAliases.indexOf(userResponse) !== -1;
                   } else {
                     confirmation = false;
                   }
@@ -241,6 +281,11 @@ class Raid extends Party {
   async setHatchTime(hatchTime) {
     let endTime;
 
+    const hatchTimeMoment = moment(hatchTime);
+    hatchTimeMoment.seconds(0);
+    hatchTimeMoment.milliseconds(0);
+    hatchTime = hatchTimeMoment.valueOf();
+
     if (this.pokemon.duration) {
       endTime = hatchTime + (this.pokemon.duration * 60 * 1000);
     }
@@ -250,12 +295,14 @@ class Raid extends Party {
       endTime = hatchTime + (settings.standardRaidHatchedDuration * 60 * 1000);
     }
 
+    const oldHatchTime = this.hatchTime;
+
     this.hatchTime = hatchTime;
     this.endTime = endTime;
 
     // update or delete screenshot if all information has now been set
     if (this.incompleteScreenshotMessage) {
-      if (this.timeWarn) {
+      if (this.timeWarn && oldHatchTime !== hatchTime) {
         delete this.timeWarn;
       }
 
@@ -264,7 +311,7 @@ class Raid extends Party {
           if (messageResult.ok) {
             const message = messageResult.message;
 
-            if (!this.pokemon || (this.pokemon && this.pokemon.placeholder)) {
+            if (this.timeWarn || !this.pokemon || (this.pokemon && this.pokemon.placeholder)) {
               message.edit(this.getIncompleteScreenshotMessage())
                 .catch(err => log.error(err));
             } else {
@@ -276,6 +323,16 @@ class Raid extends Party {
         })
         .catch(err => log.error(err));
     }
+
+    const newChannelName = this.generateChannelName();
+
+    await PartyManager.getChannel(this.channelId)
+      .then(channelResult => {
+        if (channelResult.ok) {
+          return channelResult.channel.setName(newChannelName);
+        }
+      })
+      .catch(err => log.error(err));
 
     await this.persist();
 
@@ -315,19 +372,23 @@ class Raid extends Party {
       hatchTime = endTime - (settings.standardRaidHatchedDuration * 60 * 1000);
     }
 
+    const oldEndTime = this.endTime;
+
     this.hatchTime = hatchTime;
     this.endTime = endTime;
 
     // update or delete screenshot if all information has now been set
     if (this.incompleteScreenshotMessage) {
-      delete this.timeWarn;
+      if (this.timeWarn && oldEndTime !== endTime) {
+        delete this.timeWarn;
+      }
 
       PartyManager.getMessage(this.incompleteScreenshotMessage)
         .then(messageResult => {
           if (messageResult.ok) {
             const message = messageResult.message;
 
-            if (!this.pokemon || (this.pokemon && this.pokemon.placeholder)) {
+            if (this.timeWarn || !this.pokemon || (this.pokemon && this.pokemon.placeholder)) {
               message.edit(this.getIncompleteScreenshotMessage())
                 .catch(err => log.error(err));
             } else {
@@ -340,6 +401,30 @@ class Raid extends Party {
         .catch(err => log.error(err));
     }
 
+    const newChannelName = this.generateChannelName();
+
+    await PartyManager.getChannel(this.channelId)
+      .then(channelResult => {
+        if (channelResult.ok) {
+          return channelResult.channel.setName(newChannelName);
+        }
+      })
+      .catch(err => log.error(err));
+
+    await this.persist();
+
+    return {party: this};
+  }
+
+  async setMoveset(moveset) {
+    if (!!moveset.quick) {
+      this.quickMove = moveset.quick;
+    }
+
+    if (!!moveset.cinematic) {
+      this.cinematicMove = moveset.cinematic;
+    }
+
     await this.persist();
 
     return {party: this};
@@ -349,14 +434,26 @@ class Raid extends Party {
     this.pokemon = pokemon;
     this.isExclusive = !!pokemon.exclusive;
 
+    // clear any set moves
+    delete this.quickMove;
+    delete this.cinematicMove;
+
+    if (pokemon.quickMoves && pokemon.quickMoves.length === 1) {
+      this.quickMove = pokemon.quickMoves[0];
+    }
+
+    if (pokemon.cinematicMoves && pokemon.cinematicMoves.length === 1) {
+      this.cinematicMove = pokemon.cinematicMoves[0];
+    }
+
     // update or delete screenshot if all information has now been set
     if (this.incompleteScreenshotMessage) {
-      PartyManager.getMessage(this.incompleteScreenshotMessage)
+      await PartyManager.getMessage(this.incompleteScreenshotMessage)
         .then(messageResult => {
           if (messageResult.ok) {
             const message = messageResult.message;
 
-            if (this.timeWarn || (!this.hatchTime && this.endTime === TimeType.UNDEFINED_END_TIME)) {
+            if (this.timeWarn || this.endTime === TimeType.UNDEFINED_END_TIME) {
               message.edit(this.getIncompleteScreenshotMessage())
                 .catch(err => log.error(err));
             } else {
@@ -375,11 +472,13 @@ class Raid extends Party {
         (settings.standardRaidIncubateDuration + settings.standardRaidHatchedDuration) * 60 * 1000),
       this.lastPossibleTime);
 
-    await this.setEndTime(this.endTime);
+    if (this.endTime !== TimeType.UNDEFINED_END_TIME) {
+      await this.setEndTime(this.endTime);
+    }
 
     const newChannelName = this.generateChannelName();
 
-    PartyManager.getChannel(this.channelId)
+    await PartyManager.getChannel(this.channelId)
       .then(channelResult => {
         if (channelResult.ok) {
           return channelResult.channel.setName(newChannelName);
@@ -430,27 +529,50 @@ class Raid extends Party {
   }
 
   static async getRaidsFormattedMessage(channelId) {
-    const raids = PartyManager.getAllParties(channelId, PartyType.RAID);
+    const raids = PartyManager.getAllParties(channelId, PartyType.RAID)
+        .filter(raid => !!!raid.isExclusive)
+        .sort((raidA, raidB) => {
+          const timeA = !!raidA.endTime ?
+            raidA.endTime :
+            raidA.lastPossibleTime,
+            timeB = !!raidB.endTime ?
+              raidB.endTime :
+              raidB.lastPossibleTime;
 
-    if (!raids || raids.length === 0) {
-      return 'No raids exist for this channel.  Create one with \`!raid\`!';
+          return timeA - timeB;
+        }),
+      summaryFields = (await Promise.all(raids.map(raid => raid.getSummaryField())))
+        .filter(summaryField => summaryField !== ''),
+      groupedRaids = Object.create(null);
+
+    summaryFields
+      .forEach(summaryField => {
+        const pokemon = summaryField.name,
+          field = summaryField.value,
+          fields = groupedRaids[pokemon];
+
+        if (!fields) {
+          groupedRaids[pokemon] = [field];
+        } else {
+          fields.push(field);
+        }
+      });
+
+    if (Object.keys(groupedRaids).length === 0) {
+      return 'No non-EX raids exist for this channel.  Create one with \`!raid\`!';
     }
 
-    const raidStrings = await Promise.all(raids
-        .map(async raid => await raid.getShortMessage())),
-      filteredRaidStrings = raidStrings
-        .filter(raidString => {
-          return raidString !== '';
-        });
+    const embed = new Discord.MessageEmbed();
+    embed.setColor('GREEN');
+    embed.setTitle('Currently Active Raids');
 
-    if (filteredRaidStrings.length === 0) {
-      return 'No raids exist for this channel.  Create one with \`!raid\`!';
-    }
+    Object.keys(groupedRaids).sort()
+      .forEach(pokemon => embed.addField(pokemon, groupedRaids[pokemon].join('\n')));
 
-    return filteredRaidStrings.join('\n');
+    return embed;
   }
 
-  getShortMessage() {
+  getSummaryField() {
     const pokemon = this.isExclusive ?
       'EX Raid' :
       this.pokemon.name ?
@@ -471,8 +593,10 @@ class Raid extends Party {
 
     return PartyManager.getChannel(this.channelId)
       .then(channelResult => channelResult.ok ?
-        `**${pokemon}**\n` +
-        `${channelResult.channel.toString()} :: ${gymName} :: **${totalAttendees}** potential trainer${totalAttendees !== 1 ? 's' : ''}${endTime}\n` :
+        Object.assign({}, {
+          name: pokemon,
+          value: `${channelResult.channel.toString()} :: ${gymName} :: **${totalAttendees}** potential trainer${totalAttendees !== 1 ? 's' : ''}${endTime}`
+        }) :
         '')
       .catch(err => {
         log.error(err);
@@ -498,9 +622,14 @@ class Raid extends Party {
       gymName = !!gym.nickname ?
         gym.nickname :
         gym.gymName,
-      member = (await this.getMember(memberId)).member;
+      member = this.createdById > 0 ?
+        (await this.getMember(memberId)).member :
+        null,
+      byLine = member !== null ?
+        ` by ${member.displayName}` :
+        '';
 
-    return `A raid for ${pokemonName} has been announced at ${gymName} (#${regionChannel.name}) by ${member.displayName}: ${raidChannel.toString()}.`;
+    return `A raid for ${pokemonName} has been announced at ${gymName} (#${regionChannel.name})${byLine}: ${raidChannel.toString()}.`;
   }
 
   async getExChannelMessageHeader() {
@@ -546,8 +675,7 @@ class Raid extends Party {
       message += '\n\n**Pokemon** could not be determined, please help set the pokemon by typing \`!pokemon <name>\`';
     }
 
-    log.debug(this.hatchTime, this.endTime, TimeType.UNDEFINED_END_TIME);
-    if (!this.hatchTime && this.endTime === TimeType.UNDEFINED_END_TIME) {
+    if (this.endTime === TimeType.UNDEFINED_END_TIME) {
       message += '\n\n**Time** could not be determined, please help set the time by typing either \`!hatch <time>\` or \`!end <time>\`';
     } else if (this.timeWarn) {
       message += '\n\n**Time** could not be determined precisely, please help set the time by typing either \`!hatch <time>\` or \`!end <time>\`';
@@ -569,7 +697,12 @@ class Raid extends Party {
           .map(condition => Helper.getEmoji(condition))
           .join('')}` :
         '',
-
+      pokemonQuickMove = !!this.quickMove ?
+        moves[this.quickMove] :
+        '????',
+      pokemonCinematicMove = !!this.cinematicMove ?
+        moves[this.cinematicMove] :
+        '????',
       raidDescription = this.isExclusive ?
         `EX Raid against ${pokemon}` :
         `Level ${this.pokemon.tier} Raid against ${pokemon}`,
@@ -581,7 +714,9 @@ class Raid extends Party {
         sameElse: 'l LT'
       },
 
-      reportingMember = (await this.getMember(this.createdById)).member,
+      reportingMember = (this.createdById >= 0) ?
+        (await this.getMember(this.createdById)).member :
+        {displayName: '????'},
       raidReporter = `originally reported by ${reportingMember.displayName}`,
 
       endTime = this.endTime !== TimeType.UNDEFINED_END_TIME ?
@@ -595,7 +730,7 @@ class Raid extends Party {
           '__Egg Hatched At__' :
           '__Egg Hatch Time__' :
         '',
-        
+      hatchStage = this.getHatchStage(),
       gym = Gym.getGym(this.gymId),
       gymName = !!gym.nickname ?
         gym.nickname :
@@ -630,31 +765,68 @@ class Raid extends Party {
           attendeeEntry[1].status === PartyStatus.COMPLETE_PENDING),
       completeAttendees = sortedAttendees
         .filter(attendeeEntry => attendeeEntry[1].status === PartyStatus.COMPLETE),
+
+      embedColors = {
+        2: 'GREEN',
+        3: '#ff0000'
+      },
       embed = new Discord.MessageEmbed();
 
-    embed.setColor('GREEN');
+    if (hatchStage !== 1) {
+      embed.setColor(embedColors[hatchStage]);
+    }
+
     embed.setTitle(`Map Link: ${gymName}`);
     embed.setURL(gymUrl);
-    embed.setDescription(raidDescription);
+
+    const shiny = this.pokemon.shiny ?
+      Helper.getEmoji(settings.emoji.shiny) || '✨' :
+      '';
+    embed.setDescription(raidDescription + shiny);
 
     if (pokemonUrl !== '') {
       embed.setThumbnail(pokemonUrl);
     }
 
+    let pokemonDataContent = '';
+
     if (this.pokemon.weakness && this.pokemon.weakness.length > 0) {
-      embed.addField('**Weaknesses**', this.pokemon.weakness
+      pokemonDataContent += '**Weaknesses**\n';
+      pokemonDataContent += this.pokemon.weakness
         .map(weakness => Helper.getEmoji(weakness.type).toString() +
-          (weakness.multiplier > 1.5 ?
+          (weakness.multiplier > 1.6 ?
             'x2 ' :
             ''))
-        .join(''));
+        .join('');
     }
 
     if (pokemonCPString) {
-      embed.addField('**Catch CP Ranges**', pokemonCPString);
+      if (pokemonDataContent) {
+        pokemonDataContent += '\n\n';
+      }
+
+      pokemonDataContent += '**Catch CP Ranges**\n';
+      pokemonDataContent += pokemonCPString;
     }
 
-    embed.setFooter(endTime + raidReporter, reportingMember.user.displayAvatarURL());
+    if (pokemon !== '????' && (settings.showUnknownMoves || pokemonQuickMove !== '????' || pokemonCinematicMove !== '????')) {
+      if (pokemonDataContent) {
+        pokemonDataContent += '\n\n';
+      }
+
+      pokemonDataContent += '**Moveset (Fast / Charge)**\n';
+      pokemonDataContent += `${pokemonQuickMove} / ${pokemonCinematicMove}`;
+    }
+
+    if (pokemonDataContent !== '') {
+      embed.addField('**Pokémon Information**', pokemonDataContent);
+    }
+
+    embed.setFooter(endTime + raidReporter,
+      reportingMember.displayName !== '????' ?
+        reportingMember.user.displayAvatarURL() :
+        Helper.client.rest.cdn.DefaultAvatar(0)
+    );
 
     this.groups
       .forEach(group => {
@@ -703,7 +875,7 @@ class Raid extends Party {
       embed.addField('__Complete__', Party.buildAttendeesList(completeAttendees, 'premierball', totalAttendeeCount));
     }
 
-    if (!!this.hatchTime) {
+    if (!!this.hatchTime && !isNaN(this.hatchTime)) {
       embed.addField(hatchLabel, hatchTime.calendar(null, calendarFormat));
     }
 
@@ -717,12 +889,12 @@ class Raid extends Party {
       }
     }
 
-    if (!!gym.additional_information) {
+    if (!!gym.additionalInformation) {
       if (additionalInformation !== '') {
         additionalInformation += '\n\n';
       }
 
-      additionalInformation += gym.additional_information;
+      additionalInformation += gym.additionalInformation;
     }
 
     if (additionalInformation !== '') {
@@ -793,13 +965,7 @@ class Raid extends Party {
     const nonCharCleaner = new RegExp(/[^\w]/, 'g'),
       pokemonName = (this.isExclusive ?
         'ex raid' :
-        !!this.pokemon.name ?
-          this.pokemon.name :
-          `tier ${this.pokemon.tier}`)
-        .replace(nonCharCleaner, ' ')
-        .split(' ')
-        .filter(token => token.length > 0)
-        .join('-'),
+        this.generatePokemonName(this.pokemon)),
       gym = Gym.getGym(this.gymId),
       gymName = (!!gym.nickname ?
         removeDiacritics(gym.nickname) :
@@ -813,14 +979,59 @@ class Raid extends Party {
     return pokemonName + '-' + gymName;
   }
 
+  generatePokemonName(pokemon) {
+    const nonCharCleaner = new RegExp(/[^\w]/, 'g');
+    let type = '',
+      prefixType = this.getHatchStage();
+
+    if (prefixType === 1) {
+      type = 'egg ' + pokemon.tier;
+    } else if (prefixType === 3 && pokemon.name === undefined) {
+      type = 'expired ' + pokemon.tier;
+    } else if (prefixType === 3 && pokemon.name !== undefined) {
+      type = 'expired ' + pokemon.name;
+    } else if (prefixType === 2 && pokemon.name === undefined) {
+      type = 'boss ' + pokemon.tier;
+    } else if (prefixType === 2 && pokemon.name !== undefined) {
+      type = pokemon.name;
+    }
+
+    return type.replace(nonCharCleaner, ' ')
+      .split(' ')
+      .filter(token => token.length > 0)
+      .join('-');
+  }
+
+  getHatchStage() {
+    let now = moment(),
+      hatchTime = !!this.hatchTime ?
+        moment(this.hatchTime) :
+        moment.invalid(),
+      endTime = (!!this.endTime && this.endTime !== TimeType.UNDEFINED_END_TIME) ?
+        moment(this.endTime) :
+        moment.invalid();
+
+    if (!hatchTime.isValid() || now < hatchTime || hatchTime.isSame(now)) {
+      return 1;
+    } else if (now >= endTime) {
+      return 3;
+    } else if (now >= hatchTime) {
+      return 2;
+    }
+  }
+
   toJSON() {
     return Object.assign(super.toJSON(), {
+      originallyCreatedBy: this.originallyCreatedBy,
       isExclusive: this.isExclusive,
       lastPossibleTime: this.lastPossibleTime,
+      timeWarn: this.timeWarn,
       hatchTime: this.hatchTime,
       endTime: this.endTime,
       pokemon: this.pokemon,
-      gymId: this.gymId
+      gymId: this.gymId,
+      quickMove: this.quickMove,
+      cinematicMove: this.cinematicMove
     });
   }
 }

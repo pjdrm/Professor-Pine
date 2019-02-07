@@ -160,6 +160,10 @@ class Helper {
     return this.guild.get(guild.id).channels.exAnnounceChannel;
   }
 
+  getUnownChannel(guild) {
+    return this.guild.get(guild.id).channels.unown;
+  }
+
   isManagement(message) {
     let isModOrAdmin = false;
 
@@ -178,6 +182,21 @@ class Helper {
         message.member.roles.has(moderatorRoleId);
     }
     return isModOrAdmin || this.client.isOwner(message.author);
+  }
+  
+  isBotManagement(message) {
+    let isModOrAdmin = this.isManagement(message);
+    let isBotMod = false; 
+    if (message.channel.type !== 'dm') {
+      const botModRole = this.getRole(message.guild, 'bot developer'),
+            botRoleId = botModRole ?
+              botModRole.id : 
+              -1;
+      
+      isBotMod = message.member.roles.has(botRoleId);
+    }
+    
+    return isModOrAdmin || isBotMod || this.client.isOwner(message.author);
   }
 
   isBotChannel(message) {

@@ -11,9 +11,13 @@
   "cleanupInterval": 60000,
   "messageCleanupDelaySuccess": 5000,
   "messageCleanupDelayError": 30000,
+  "messageCleanupDelayStatus": 60000,
+  "showUnknownMoves": true,
+  "databaseRaids": true,
   "emoji": {
     "thumbsUp": "thumbsup",
-    "thumbsDown": "thumbsdown"
+    "thumbsDown": "thumbsdown",
+    "shiny": "pineshiny"
   },
   "features": {
     "exGymChannel": true,
@@ -31,6 +35,8 @@
     "raid-crud",
     "roles",
     "notifications",
+    "friends",
+    "silph",
     "util"
   ]
 }

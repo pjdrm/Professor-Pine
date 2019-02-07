@@ -5,11 +5,18 @@ const CommandGroup = {
   RAID_CRUD: 'raid-crud',
   ROLES: 'roles',
   NOTIFICATIONS: 'notifications',
+  FRIENDS: 'friends',
+  SILPH: 'silph',
   UTIL: 'util'
 };
 
 const GymParameter = {
   FAVORITE: 'favorite'
+};
+
+const PrivacyOpts = {
+  ANONYMOUS: 1,
+  VISIBLE: 0
 };
 
 const PartyStatus = {
@@ -46,4 +53,4 @@ const TimeParameter = {
   END: 'end'
 };
 
-module.exports = {CommandGroup, GymParameter, PartyStatus, PartyType, Team, TimeMode, TimeParameter};
+module.exports = {CommandGroup, GymParameter, PartyStatus, PartyType, Team, TimeMode, TimeParameter, PrivacyOpts};
