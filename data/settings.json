@@ -4,20 +4,16 @@
   "exclusiveRaidIncubateDuration": 20160,
   "exclusiveRaidHatchedDuration": 45,
   "startClearTime": 10,
-  "deletionGraceTime": 5,
-  "deletionWarningTime": 10,
+  "deletionGraceTime": 1,
+  "deletionWarningTime": 2,
   "raidCompleteTimeout": 5,
   "screenshotMessageOffsetTime": 45,
   "cleanupInterval": 60000,
   "messageCleanupDelaySuccess": 5000,
   "messageCleanupDelayError": 30000,
-  "messageCleanupDelayStatus": 60000,
-  "showUnknownMoves": true,
-  "databaseRaids": true,
   "emoji": {
     "thumbsUp": "thumbsup",
-    "thumbsDown": "thumbsdown",
-    "shiny": "pineshiny"
+    "thumbsDown": "thumbsdown"
   },
   "features": {
     "exGymChannel": true,
@@ -35,8 +31,6 @@
     "raid-crud",
     "roles",
     "notifications",
-    "friends",
-    "silph",
     "util"
   ]
 }
